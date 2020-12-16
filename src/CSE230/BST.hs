@@ -27,6 +27,9 @@ import Test.QuickCheck
 
 -- | The BST Data Type ------------------------------------------------------------------ 
 
+poo :: BST Int String
+poo = Bind (5) "V" (Emp) (Emp)
+
 data BST k v 
   = Emp                          -- ^ Empty tree
   | Bind k v (BST k v) (BST k v) -- ^ Node with key=k, val=v, and left, right subtrees
@@ -94,8 +97,25 @@ genBSTop  = frequency [(5, genBSTadd), (1, genBSTdel)]
 --   Write a function`bstInsert k v t` that inserts a key `k` with value `v` into the tree `t`. 
 --   If `k` already exists in `t` then its value should be *replaced* with `v`. 
 ---------------------------------------------------------------------------------------------------
+
+-- >>> bstInsert 100 "BOO" ( Bind (15) "V" (Bind 10 "A" (Emp) (Bind 14 "B" (Emp) (Emp))) (Emp))
+-- Bind 15 "V" (Bind 10 "A" Emp (Bind 14 "B" Emp Emp)) (Bind 100 "BOO" Emp Emp)
+--
+
 bstInsert :: (Ord k) => k -> v -> BST k v -> BST k v
-bstInsert = error "fill this in"
+bstInsert = (\k v bst -> case bst of 
+  Emp -> Bind k v (Emp) (Emp)
+  Bind a b l r -> if (a > k) then do 
+    let bst = Bind a b (bstInsert k v l) r
+    bst 
+    else (if (a < k) then do
+      let bst = Bind a b l (bstInsert k v r)
+      bst
+      else do
+        let bst = Bind a v l r
+        bst))
+  
+
 
 -- When you are done, your code should satisfy the following QC properties.
 
@@ -108,9 +128,11 @@ prop_insert_map = forAll (listOf genBSTadd) $ \ops ->
 
 -- >>> quickCheck prop_insert_bso
 -- +++ OK, passed 100 tests.
+--
 
 -- >>> quickCheck prop_insert_map
 -- +++ OK, passed 100 tests.
+--
 
 
 ---------------------------------------------------------------------------------------------------
@@ -121,7 +143,43 @@ prop_insert_map = forAll (listOf genBSTadd) $ \ops ->
 ---------------------------------------------------------------------------------------------------
 
 bstDelete :: (Ord k) => k -> BST k v -> BST k v
-bstDelete = error "fill this in"
+bstDelete = (\k bst -> case bst of 
+  Emp -> Emp
+  Bind a b l r -> if (a > k) then do 
+    let bst = Bind a b (bstDelete k l) r
+    bst 
+    else if (a < k) then do
+      let bst = Bind a b l (bstDelete k r)
+      bst
+      else case l of 
+        Emp -> (case r of 
+          Emp -> Emp
+          Bind a2 b2 l2 r2 -> Bind a2 b2 l2 r2)
+        Bind a2 b2 l2 r2 -> (case r of
+          Emp -> Bind a2 b2 l2 r2
+          Bind a3 b3 l3 r3 -> replaceNode bst r))
+
+replaceNode :: (Ord k) => BST k v -> BST k v -> BST k v
+replaceNode newBST nextBST = case nextBST of 
+  Bind a b l r -> case l of
+    Bind a2 b2 l2 r2 -> replaceNode newBST l
+    Emp -> case newBST of 
+      Bind a3 b3 l3 r3 -> do
+        let temp1 = a
+        let temp2 = b
+        let bst2 = (bstDelete a newBST)
+        case bst2 of Bind a4 b4 l4 r4 -> Bind temp1 temp2 l4 r4
+                     Emp -> Emp
+      Emp -> Emp 
+  Emp -> Emp
+
+
+-- >>> bstDelete 3  ( Bind (3) "B" (Bind 1 "A" (Emp) (Emp)) (Bind 6 "C" Emp Emp))
+-- Bind 6 "C" (Bind 1 "A" Emp Emp) Emp
+--
+
+
+
 
 -- When you are done, your code should satisfy the following QC properties.
 
