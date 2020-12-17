@@ -62,7 +62,7 @@ ofBSTops ::  Ord k => [BSTop k v] -> BST k v
 ofBSTops ops            = foldr doOp Emp ops
   where 
       doOp (BSTadd k v) = bstInsert k v
-      doOp (BSTdel k)   = bstDelete k
+      doOp (BSTdel k)   = bstDelete k    
 
 -- | We can also build a "golden" or "reference" implementation using the standard 
 --   libraries `Map` datatype
@@ -98,22 +98,72 @@ genBSTop  = frequency [(5, genBSTadd), (1, genBSTdel)]
 --   If `k` already exists in `t` then its value should be *replaced* with `v`. 
 ---------------------------------------------------------------------------------------------------
 
--- >>> bstInsert 100 "BOO" ( Bind (15) "V" (Bind 10 "A" (Emp) (Bind 14 "B" (Emp) (Emp))) (Emp))
--- Bind 15 "V" (Bind 10 "A" Emp (Bind 14 "B" Emp Emp)) (Bind 100 "BOO" Emp Emp)
---
+
 
 bstInsert :: (Ord k) => k -> v -> BST k v -> BST k v
-bstInsert = (\k v bst -> case bst of 
+bstInsert = (\k v avl -> case avl of 
   Emp -> Bind k v (Emp) (Emp)
-  Bind a b l r -> if (a > k) then do 
-    let bst = Bind a b (bstInsert k v l) r
-    bst 
+  Bind a b l r -> if (a > k) 
+    then do 
+      let avl = Bind a b (bstInsert k v l) r
+      if (isBal avl) then avl else do
+        case avl of
+          Emp -> Emp
+          Bind z1 z2 z3 z4 -> leftBalanceAVL k avl z3 
     else (if (a < k) then do
-      let bst = Bind a b l (bstInsert k v r)
-      bst
+      let avl = Bind a b l (bstInsert k v r)
+      if (isBal avl) then avl else do
+        case avl of
+          Emp -> Emp
+          Bind z1 z2 z3 z4 -> rightBalanceAVL k avl z4
       else do
-        let bst = Bind a v l r
-        bst))
+        let avl = Bind a v l r
+        avl))
+
+leftBalanceAVL :: (Ord k) => k -> BST k v -> BST k v -> BST k v
+leftBalanceAVL k (avl1) (avl2) = case avl2 of
+  Emp -> Emp
+  Bind k2 v2 l2 r2 -> if k > k2 then do
+    case avl1 of
+      Emp -> Emp
+      Bind k1 v1 l1 r1 -> do 
+        case r2 of 
+          Emp -> Emp
+          Bind k3 v3 l3 r3 -> do 
+            let t1 = Bind k1 v1 r3 r1
+            let t2 = Bind k2 v2 l2 l3
+            let t3 = Bind k3 v3 t2 t1
+            t3
+    else do 
+      case avl1 of
+        Emp -> Emp
+        Bind k1 v1 l1 r1 -> do  
+                let t1 = Bind k1 v1 r2 r1
+                let t2 = Bind k2 v2 l2 t1
+                t2 
+
+
+rightBalanceAVL :: (Ord k) => k -> BST k v -> BST k v -> BST k v
+rightBalanceAVL k (avl1) (avl2) = case avl2 of
+  Emp -> Emp
+  Bind k2 v2 l2 r2 -> if k < k2 then do
+    case avl1 of
+      Emp -> Emp
+      Bind k1 v1 l1 r1 -> do 
+        case l2 of 
+          Emp -> Emp
+          Bind k3 v3 l3 r3 -> do 
+            let t1 = Bind k1 v1 l1 l3
+            let t2 = Bind k2 v2 r3 r2
+            let t3 = Bind k3 v3 t1 t2
+            t3
+    else do 
+      case avl1 of
+        Emp -> Emp
+        Bind k1 v1 l1 r1 -> do  
+                let t1 = Bind k1 v1 l1 l2
+                let t2 = Bind k2 v2 t1 r2
+                t2  
   
 
 
@@ -122,7 +172,8 @@ bstInsert = (\k v bst -> case bst of
 prop_insert_bso :: Property
 prop_insert_bso = forAll (listOf genBSTadd) $ \ops ->
                     isBSO (ofBSTops ops)
--- >
+
+
 prop_insert_map = forAll (listOf genBSTadd) $ \ops -> 
                     eqMap (ofBSTops ops) (mapOfBSTops ops)
 
@@ -130,9 +181,11 @@ prop_insert_map = forAll (listOf genBSTadd) $ \ops ->
 -- +++ OK, passed 100 tests.
 --
 
+
 -- >>> quickCheck prop_insert_map
 -- +++ OK, passed 100 tests.
 --
+
 
 
 ---------------------------------------------------------------------------------------------------
@@ -145,19 +198,91 @@ prop_insert_map = forAll (listOf genBSTadd) $ \ops ->
 bstDelete :: (Ord k) => k -> BST k v -> BST k v
 bstDelete = (\k bst -> case bst of 
   Emp -> Emp
-  Bind a b l r -> if (a > k) then do 
-    let bst = Bind a b (bstDelete k l) r
-    bst 
-    else if (a < k) then do
-      let bst = Bind a b l (bstDelete k r)
-      bst
-      else case l of 
-        Emp -> (case r of 
+  Bind a b l r -> 
+    -- if deleted value is more than current then recurse to the right
+    if (a > k) 
+    then do 
+      let bst = Bind a b (bstDelete k l) r
+      if (isBal bst) 
+      then bst 
+      else case bst of
+        Emp -> Emp
+        Bind k2 v2 l2 r2 -> 
+          if height l2 > height r2
+          then do
+            let avl = balanceLeft bst l2
+            avl
+          else do 
+            let avl = balanceRight bst r2  
+            avl
+    -- else if deleted value is less than current then then recurse to the left
+    else 
+      if (a < k) 
+      then do
+        let bst = Bind a b l (bstDelete k r)
+        if (isBal bst) 
+        then bst 
+        else case bst of
           Emp -> Emp
-          Bind a2 b2 l2 r2 -> Bind a2 b2 l2 r2)
-        Bind a2 b2 l2 r2 -> (case r of
-          Emp -> Bind a2 b2 l2 r2
-          Bind a3 b3 l3 r3 -> replaceNode bst r))
+          Bind k2 v2 l2 r2 -> 
+            if height l2 > height r2
+            then do
+              let avl = balanceLeft bst l2
+              avl
+            else do 
+              let avl = balanceRight bst r2  
+              avl
+      -- else if deleted value is equal to current, check how many children 
+      else case l of 
+        --Delete node with no children
+        Emp -> case r of 
+          Emp -> Emp
+          -- Delete node with only right child
+          Bind a2 b2 l2 r2 -> do 
+            let x1 = Bind a2 b2 l2 r2
+            if (isBal x1) 
+            then x1 
+            else case x1 of
+              Emp -> Emp
+              Bind k2 v2 l2 r2 -> 
+                if height l2 > height r2
+                then do
+                  let x2 = balanceLeft x1 l2
+                  x2
+                else do 
+                  let x2 = balanceRight x1 r2  
+                  x2
+        Bind a2 b2 l2 r2 -> case r of
+          -- delete node with only left child
+          Emp -> do 
+            let x1 = Bind a2 b2 l2 r2
+            if (isBal x1) 
+            then x1 
+            else case x1 of
+              Emp -> Emp
+              Bind k2 v2 l2 r2 -> 
+                if height l2 > height r2
+                then do
+                  let x2 = balanceLeft x1 l2
+                  x2
+                else do 
+                  let x2 = balanceRight x1 r2  
+                  x2
+          -- delete node with two children
+          Bind a3 b3 l3 r3 -> do
+            let x1 = replaceNode bst r
+            if (isBal x1) 
+            then x1 
+            else case x1 of
+              Emp -> Emp
+              Bind k2 v2 l2 r2 -> 
+                if height l2 > height r2
+                then do
+                  let x2 = balanceLeft x1 l2
+                  x2
+                else do 
+                  let x2 = balanceRight x1 r2  
+                  x2)
 
 replaceNode :: (Ord k) => BST k v -> BST k v -> BST k v
 replaceNode newBST nextBST = case nextBST of 
@@ -167,16 +292,74 @@ replaceNode newBST nextBST = case nextBST of
       Bind a3 b3 l3 r3 -> do
         let temp1 = a
         let temp2 = b
-        let bst2 = (bstDelete a newBST)
+        let bst2 = (avlDelete a newBST)
         case bst2 of Bind a4 b4 l4 r4 -> Bind temp1 temp2 l4 r4
                      Emp -> Emp
       Emp -> Emp 
   Emp -> Emp
 
+avlDelete :: (Ord k) => k -> BST k v -> BST k v
+avlDelete = (\k bst -> case bst of 
+  Emp -> Emp
+  Bind a b l r -> 
+    if (a > k) 
+    then do 
+      let bst = Bind a b (avlDelete k l) r
+      bst 
+    else 
+      if (a < k) 
+        then do
+          let bst = Bind a b l (avlDelete k r)
+          bst
+      else case l of 
+        Emp -> (case r of 
+          Emp -> Emp
+          Bind a2 b2 l2 r2 -> Bind a2 b2 l2 r2)
+        Bind a2 b2 l2 r2 -> (case r of
+          Emp -> Bind a2 b2 l2 r2
+          Bind a3 b3 l3 r3 -> replaceNode bst r))
 
--- >>> bstDelete 3  ( Bind (3) "B" (Bind 1 "A" (Emp) (Emp)) (Bind 6 "C" Emp Emp))
--- Bind 6 "C" (Bind 1 "A" Emp Emp) Emp
---
+balanceLeft avl1 avl2 = do 
+  case avl2 of
+    Emp -> Emp
+    Bind k2 v2 l2 r2 -> 
+      if height l2 > height r2 
+      then case avl1 of 
+        Emp -> Emp
+        Bind k1 v1 l1 r1 -> do
+          let t1 = Bind k1 v1 r2 r1
+          let t2 = Bind k2 v2 l2 t1
+          t2
+      else case avl1 of 
+        Emp -> Emp
+        Bind k1 v1 l1 r1 -> case r2 of
+          Emp -> Emp
+          Bind k3 v3 l3 r3 -> do
+            let t1 = Bind k1 v1 r3 r1
+            let t2 = Bind k2 v2 l2 l3
+            let t3 = Bind k3 v3 t2 t1
+            t3
+  
+balanceRight avl1 avl2 = do
+  case avl2 of
+    Emp -> Emp
+    Bind k2 v2 l2 r2 -> 
+      if height l2 < height r2 
+      then case avl1 of 
+        Emp -> Emp
+        Bind k1 v1 l1 r1 -> do
+          let t1 = Bind k1 v1 l1 l2
+          let t2 = Bind k2 v2 t1 r2
+          t2
+      else case avl1 of 
+        Emp -> Emp
+        Bind k1 v1 l1 r1 -> case l2 of
+          Emp -> Emp
+          Bind k3 v3 l3 r3 -> do 
+            let t1 = Bind k1 v1 l1 l3
+            let t2 = Bind k2 v2 r3 r2
+            let t3 = Bind k3 v3 t1 t2
+            t3
 
 
 
@@ -207,6 +390,7 @@ eqMap bst map = toBinds bst == Map.toAscList map
 --
 
 
+
 ---------------------------------------------------------------------------------------------------
 -- | (c) Balanced Trees [These are "AVL Trees" where the height difference between left/right <= 2]
 ---------------------------------------------------------------------------------------------------
@@ -223,7 +407,28 @@ isBal Emp            = True
 
 -- | Write a balanced tree generator
 genBal :: Gen (BST Int Char)
-genBal = error "fill this in"
+genBal = do
+  k <- elements keys
+  v <- elements ['a'..'z']
+  c1 <- elements keys
+  c2 <- elements keys
+  let c = c1*c2
+  let a = bstInsert k v Emp
+  let a2 = buildAVL k v a c
+  a2
+    where
+      buildAVL k v avl count  = do
+        a <- elements keys
+        b <- elements ['a'..'z']
+        let avl2 = bstInsert a b avl
+        let count2 = count - 1
+        if count2 <= 0 
+        then return avl2
+        else do 
+          let avl3 = buildAVL k v avl2 count2
+          avl3
+
+
 
 -- such that
 prop_genBal :: Property
@@ -231,6 +436,7 @@ prop_genBal = forAll genBal isBal
 
 -- >>> quickCheck prop_genBal
 -- +++ OK, passed 100 tests.
+--
 
 
 ---------------------------------------------------------------------------------------------------
@@ -240,6 +446,8 @@ prop_genBal = forAll genBal isBal
 --   if given balanced trees as input, they return balanced trees as output.
 --   That is, they satisfy the properties
 ---------------------------------------------------------------------------------------------------
+--
+
 
 prop_insert_bal :: Property
 prop_insert_bal = forAll (listOf genBSTadd) (\ops -> isBal (ofBSTops ops))
@@ -249,10 +457,12 @@ prop_delete_bal = forAll (listOf genBSTop) (\ops -> isBal (ofBSTops ops))
 
 -- >>> quickCheck prop_insert_bal
 -- +++ OK, passed 100 tests.
+--
 
 
 -- >>> quickCheck prop_delete_bal 
 -- +++ OK, passed 100 tests.
+--
 
 ---------------------------------------------------------------------------------------------------
 -- | [NOTE:Balancing] One "trivial" way to achieve this is to 
