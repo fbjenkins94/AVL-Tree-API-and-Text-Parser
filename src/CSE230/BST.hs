@@ -408,17 +408,15 @@ isBal Emp            = True
 -- | Write a balanced tree generator
 genBal :: Gen (BST Int Char)
 genBal = do
-  k <- elements keys
+  k <- elements [0..100]
   v <- elements ['a'..'z']
-  c1 <- elements keys
-  c2 <- elements keys
-  let c = c1*c2
+  c <- elements [0..100]
   let a = bstInsert k v Emp
   let a2 = buildAVL k v a c
   a2
     where
       buildAVL k v avl count  = do
-        a <- elements keys
+        a <- elements [0..100]
         b <- elements ['a'..'z']
         let avl2 = bstInsert a b avl
         let count2 = count - 1
