@@ -194,3 +194,31 @@ out3 = ( fromList [("A", IntVal 610), ("B", IntVal 987), ("I", IntVal 15), ("N",
        , Nothing
        , unlines ["A: 0","A: 1","A: 1","A: 2","A: 3","A: 5","A: 8","A: 13","A: 21","A: 34","A: 55","A: 89","A: 144","A: 233","A: 377"]
        )
+
+nestedIf1 :: Statement
+nestedIf1 = [
+  "X" <-: 50,
+  "Y" <-: 0,
+  If ("X" <: 10)
+    ["Y" <-: 10]
+    [If ("X" <: 20)
+      ["Y" <-: 20]
+      [If ("X" <: 30)
+        ["Y" <-: 30]
+        [If ("X" <: 40)
+          ["Y" <-: 40]
+          [If ("X" <: 50)
+            ["Y" <-: 50]
+            [If ("X" <: 60)
+              ["Y" <-: 60]
+              ["Y" <-: 100]
+            ]
+          ]
+        ]
+      ]
+    ]
+  ]
+
+nestedIfOut1 :: (Store, Maybe Value, String)
+nestedIfOut1 = ( fromList [("X", IntVal 50), ("Y", IntVal 60)],
+  Nothing, "")
